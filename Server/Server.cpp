@@ -9,13 +9,12 @@
 #include "Semaphore.h"
 
 struct ChatLog{
-    char* message;
+    std::string message;
 };
-int readcount = 0;
 
 using namespace Sync;
 // This thread handles each client connection
-class SocketThreadReader : public Thread
+class SocketThread : public Thread
 {
 private:
     // Reference to our connected socket
@@ -23,28 +22,18 @@ private:
     // The data we are receiving
     ByteArray data;
     char* temp;
-    int readcount;
-    std::string roomID;
 public:
     bool flag;
-    SocketThreadReader(Socket& socket, std::string roomID)
-    : socket(socket), flag(false), readcount(0), roomID(roomID)
+    SocketThread(Socket& socket, std::string roomID)
+    : socket(socket), flag(false)
     {}
 
-    ~SocketThreadReader()
+    ~SocketThread()
     {}
 
     Socket& GetSocket()
     {
         return socket;
-    }
-
-    ByteArray encode(std::string message){
-        ByteArray n;
-        for(int i = 0;i<message.length;i++){
-            n.v[i] = message[i];
-        }
-        return n;
     }
 
     virtual long ThreadMain()
@@ -54,98 +43,7 @@ public:
             try
             {
                 // Wait for data
-                Semaphore guard(roomID+'g');
-                Semaphore write(roomID+'w');
-                Semaphore buffer(roomID+'b');
-                Shared<ChatLog> room(roomID);
-                guard.Wait();
-                readcount++;
-                if(readcount == 1)
-                    write.Wait();
-                guard.Signal();    
-
-                temp = room->message;
-                buffer.Wait();
-                socket.Write(encode(temp));
-                buffer.Signal();
-
-
-                guard.Wait();
-                readcount--;
-                if(readcount == 0)
-                    write.Signal();
-            }
-            catch (...)
-            {
-                // ???
-                std::cout << "could not read socket data" << std::endl;
-            }
-            if(flag)
-                break;
-        }
-		
-	// ???
-
-        return 0;
-    }
-};
-
-class SocketThreadWriter : public Thread
-{
-private:
-    // Reference to our connected socket
-    Socket& socket;
-    // The data we are receiving
-    ByteArray data;
-    char* temp;
-    std::string roomID, temp;
-public:
-    bool flag;
-    SocketThreadWriter(Socket& socket, std::string roomID)
-    : socket(socket), flag(false), roomID(roomID)
-    {}
-
-    ~SocketThreadWriter()
-    {}
-
-    Socket& GetSocket()
-    {
-        return socket;
-    }
-
-    
-
-    virtual long ThreadMain()
-    {
-        while(1)
-        {
-            try
-            {
-                // Wait for data
-                Semaphore guard(roomID+'g');
-                Semaphore write(roomID+'w');
-                Semaphore buffer(roomID+'b');
-                Shared<ChatLog> room(roomID);
-                guard.Wait();
-                readcount++;
-                if(readcount == 1)
-                    write.Wait();
-                guard.Signal();    
-
-                temp = room->message;
-                buffer.Wait();
-                socket.Write(encode(temp));
-                buffer.Signal();
-
-
-                guard.Wait();
-                readcount--;
-                if(readcount == 0)
-                    write.Signal();
-
-
-
-
+                socket.Read(data);
                 
                 // Perform operations on the data
                 /*temp = new char[data.v.size()];
@@ -157,8 +55,8 @@ public:
                 std::cout<<a<<std::endl;
                 
                 // Send it back
-                //socket.Write(data);
-                //delete temp;
+                socket.Write(data);
+                delete temp;
             }
             catch (...)
             {
@@ -182,8 +80,7 @@ private:
     SocketServer& server;
     bool terminate = false;
     bool found;
-    std::vector<SocketThreadReader*> readers;
-    std::vector<SocketThreadWriter*> writers;
+    std::vector<SocketThread*> threads;
     std::vector<Socket*> sockets;
     std::vector<Shared<ChatLog>> chatrooms;
     std::vector<std::string> roomID;
@@ -203,15 +100,10 @@ public:
             sockets[i]->Close();
             sockets.pop_back();
         }
-        for(int i = readers.size()-1; i>0;i--){
-            readers[i]->flag = true;
-            delete readers[i];
-            readers.pop_back();
-        }
-        for(int i = writers.size()-1; i>0;i--){
-            writers[i]->flag = true;
-            delete writers[i];
-            writers.pop_back();
+        for(int i = threads.size()-1; i>0;i--){
+            threads[i]->flag = true;
+            delete threads[i];
+            threads.pop_back();
         }
         
     }
@@ -232,9 +124,8 @@ public:
             std::cout << id << std::endl;
             if(!found){
                 Shared<ChatLog> a(login.ToString(), true);
-                Semaphore guard(id+'g',1,true);
-                Semaphore wsem(id+'w',1,true);
-                Semaphore buffer(id+'b',0,true);
+                Semaphore guard(id+'g',true);
+                Semaphore wsem(id+'w',true);
                 roomID.push_back(id);
                 chatrooms.push_back(a);
             }
@@ -243,8 +134,7 @@ public:
 
             // Pass a reference to this pointer into a new socket thread
             Socket& socketReference = *newConnection;
-            readers.push_back(new SocketThreadReader(socketReference, id));
-            writers.push_back(new SocketThreadWriter(socketReference, id));
+            threads.push_back(new SocketThread(socketReference, id));
         }while(!flag);
         return 0;
     }
