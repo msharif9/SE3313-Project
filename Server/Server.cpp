@@ -5,8 +5,7 @@
 #include <list>
 #include <vector>
 #include <algorithm>
-#include "SharedObject.h"
-#include "Semaphore.h"
+//#include "SharedObject.h"
 
 struct ChatLog{
     std::string message;
@@ -24,7 +23,7 @@ private:
     char* temp;
 public:
     bool flag;
-    SocketThread(Socket& socket, std::string roomID)
+    SocketThread(Socket& socket)
     : socket(socket), flag(false)
     {}
 
@@ -46,13 +45,11 @@ public:
                 socket.Read(data);
                 
                 // Perform operations on the data
-                /*temp = new char[data.v.size()];
+                temp = new char[data.v.size()];
                 for(int i = 0; i<data.v.size(); i++) {
                     temp[i] = data.v[i];
                     data.v[i] = toupper(temp[i]); 
-                }*/
-                std::string a = temp;
-                std::cout<<a<<std::endl;
+                }
                 
                 // Send it back
                 socket.Write(data);
@@ -79,17 +76,14 @@ class ServerThread : public Thread
 private:
     SocketServer& server;
     bool terminate = false;
-    bool found;
     std::vector<SocketThread*> threads;
     std::vector<Socket*> sockets;
-    std::vector<Shared<ChatLog>> chatrooms;
-    std::vector<std::string> roomID;
-    std::string id;
+    //std::vector<Shared<ChatLog>> chatrooms;
     ByteArray login;
 public:
     bool flag;
     ServerThread(SocketServer& server)
-    : server(server), flag(false), found(false)
+    : server(server), flag(false)
     {}
 
     ~ServerThread()
@@ -115,26 +109,11 @@ public:
             Socket* newConnection = new Socket(server.Accept());
             sockets.push_back(newConnection);
             newConnection->Read(login);
-            id = login.ToString();
-            for(int i = 0; roomID.size();i++){
-                if(roomID[i] == id){
-                    found = true;
-                }
-            }
-            std::cout << id << std::endl;
-            if(!found){
-                Shared<ChatLog> a(login.ToString(), true);
-                Semaphore guard(id+'g',true);
-                Semaphore wsem(id+'w',true);
-                roomID.push_back(id);
-                chatrooms.push_back(a);
-            }
-            else
-                found = false;
+            std::cout << login.ToString() << std::endl;
 
             // Pass a reference to this pointer into a new socket thread
             Socket& socketReference = *newConnection;
-            threads.push_back(new SocketThread(socketReference, id));
+            threads.push_back(new SocketThread(socketReference));
         }while(!flag);
         return 0;
     }

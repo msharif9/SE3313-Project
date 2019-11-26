@@ -52,7 +52,7 @@ public:
 			// Get the response
 			socket.Read(data);
 			//...
-			if(data_str != "done" && data.ToString() != data_str && data.ToString() != "")
+			if(data_str != "done")
 				std::cout << data.ToString() << std::endl;
 			else{
 				std::cout << "Connection Closed" << std::endl;
